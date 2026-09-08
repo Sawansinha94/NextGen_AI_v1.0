@@ -149,6 +149,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fields", default=DEFAULT_FIELDS, help="Comma-separated fields returned by ServiceNow")
     parser.add_argument("--execute", action="store_true", help="Execute the generated ServiceNow request")
     parser.add_argument("--user-name", default="unknown")
+    parser.add_argument("--user-id", help="PostgreSQL user ID used to resolve ServiceNow credentials")
     parser.add_argument(
         "--db-config",
         type=Path,
@@ -198,7 +199,7 @@ def main() -> int:
             "entities": payload["raw_entities"],
         }
         if args.execute:
-            snow_settings = load_snow_settings(args.snow_config)
+            snow_settings = load_snow_settings(args.snow_config, connection, args.user_id, args.user_name)
             request_settings = {**snow_settings, "table": payload["table"]}
             if payload["method"].upper() == "GET":
                 response_data: Any = query_servicenow(

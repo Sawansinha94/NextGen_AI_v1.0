@@ -95,8 +95,13 @@ def clean_value(value: str) -> str:
     return value
 
 
-def load_snow_settings(config_path: Path) -> dict[str, Any]:
-    """Load ServiceNow connection and API settings from ``snow.config``.
+def load_snow_settings(
+    config_path: Path,
+    connection: Any | None = None,
+    user_id: str | None = None,
+    user_name: str | None = None,
+) -> dict[str, Any]:
+    """Load API defaults and resolve ServiceNow credentials for one user.
 
     Args:
         config_path: Path to the ServiceNow configuration file.
@@ -120,20 +125,49 @@ def load_snow_settings(config_path: Path) -> dict[str, Any]:
         raise ValueError("snow.config must contain [servicenow] and [api] sections")
 
     snow = parser["servicenow"]
-    required = ("instance_url", "username", "password")
-    missing = [key for key in required if not clean_value(snow.get(key, ""))]
-    if missing:
-        raise ValueError(f"Missing ServiceNow settings: {', '.join(missing)}")
-
     api = parser["api"]
-    return {
-        "instance_url": clean_value(snow["instance_url"]).rstrip("/") + "/",
-        "username": clean_value(snow["username"]),
-        "password": clean_value(snow["password"]),
+    settings = {
+        "instance_url": clean_value(snow.get("instance_url", "")).rstrip("/") + "/",
+        "username": clean_value(snow.get("username", "")),
+        "password": clean_value(snow.get("password", "")),
         "timeout": int(clean_value(snow.get("timeout", "15"))),
         "table": clean_value(api.get("table", "incident")),
         "limit": int(clean_value(api.get("limit", "100"))),
     }
+
+    if connection is not None:
+        if not user_id and not user_name:
+            raise ValueError("A user ID or user name is required to resolve ServiceNow credentials")
+        with connection.cursor() as cursor:
+            if user_id:
+                cursor.execute(
+                    'SELECT "snow_instance", "snow_username", "snow_password" '
+                    'FROM "snowusers" WHERE "user_id"::text = %s LIMIT 1',
+                    (user_id,),
+                )
+            else:
+                cursor.execute(
+                    'SELECT "snow_instance", "snow_username", "snow_password" '
+                    'FROM "snowusers" WHERE "snow_username" = %s LIMIT 1',
+                    (user_name,),
+                )
+            row = cursor.fetchone()
+        if not row:
+            raise LookupError(f"No ServiceNow credentials found for user {user_id or user_name}")
+        settings.update(
+            {
+                "instance_url": clean_value(str(row[0] or "")).rstrip("/") + "/",
+                "username": clean_value(str(row[1] or "")),
+                "password": clean_value(str(row[2] or "")),
+            }
+        )
+
+    required = ("instance_url", "username", "password")
+    missing = [key for key in required if not settings[key]]
+    if missing:
+        source = "PostgreSQL snowusers" if connection is not None else "snow.config"
+        raise ValueError(f"Missing ServiceNow settings in {source}: {', '.join(missing)}")
+    return settings
 
 
 def build_servicenow_url(settings: dict[str, Any], api_filter: str, output_column: str) -> str:
@@ -328,6 +362,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--query", required=True, help="User request to resolve through the FAQ table")
     parser.add_argument("--user-name", default="unknown", help="Chatbot user recorded in FAQ audit logs")
+    parser.add_argument("--user-id", help="PostgreSQL user ID used to resolve ServiceNow credentials")
     parser.add_argument("--db-config", type=Path, default=DEFAULT_DB_CONFIG)
     parser.add_argument("--snow-config", type=Path, default=DEFAULT_SNOW_CONFIG)
     return parser.parse_args()
@@ -346,8 +381,8 @@ def main() -> int:
     connection = None
     try:
         db_settings = load_settings(args.db_config)
-        snow_settings = load_snow_settings(args.snow_config)
         connection = connect_database(db_settings)
+        snow_settings = load_snow_settings(args.snow_config, connection, args.user_id, args.user_name)
         log_operation(connection, args.user_name, "START faq_snow_query.main", db_settings.logging_table)
         normalized_query, incident_numbers = normalize_incident_numbers(args.query)
         faq_query = canonicalize_faq_query(normalized_query)

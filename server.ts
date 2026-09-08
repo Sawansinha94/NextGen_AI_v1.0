@@ -1117,6 +1117,7 @@ app.post("/api/messages", async (req, res) => {
           tierResult = await routeRequestThroughTierAgent(
             content,
             userName || "unknown",
+            userId,
           );
         } catch (agentErr: any) {
           console.error("Tier agent failed:", agentErr);
@@ -1218,7 +1219,10 @@ app.get("/api/user/stats/:userId", async (req, res) => {
   }
 });
 
-function parseTierAgentResponse(stdout: string, stderr: string): {
+function parseTierAgentResponse(
+  stdout: string,
+  stderr: string,
+): {
   tier: string;
   status: string;
   text: string;
@@ -1227,8 +1231,7 @@ function parseTierAgentResponse(stdout: string, stderr: string): {
   const fallback = {
     tier: "Tier 3",
     status: "empty",
-    text:
-      stderr || "No response from tier agent.",
+    text: stderr || "No response from tier agent.",
     tableData: [],
   };
 
@@ -1296,6 +1299,7 @@ function parseTierAgentResponse(stdout: string, stderr: string): {
 async function routeRequestThroughTierAgent(
   userContent: string,
   userName: string,
+  userId?: string,
 ): Promise<{
   tier?: string;
   status?: string;
@@ -1306,12 +1310,57 @@ async function routeRequestThroughTierAgent(
   const candidates: Array<[string, string[]]> =
     process.platform === "win32"
       ? [
-          ["py", ["-3", scriptPath, "--query", userContent, "--user-name", userName || "unknown"]],
-          ["python", [scriptPath, "--query", userContent, "--user-name", userName || "unknown"]],
+          [
+            "py",
+            [
+              "-3",
+              scriptPath,
+              "--query",
+              userContent,
+              "--user-name",
+              userName || "unknown",
+              "--user-id",
+              userId || "",
+            ],
+          ],
+          [
+            "python",
+            [
+              scriptPath,
+              "--query",
+              userContent,
+              "--user-name",
+              userName || "unknown",
+              "--user-id",
+              userId || "",
+            ],
+          ],
         ]
       : [
-          ["python3", [scriptPath, "--query", userContent, "--user-name", userName || "unknown"]],
-          ["python", [scriptPath, "--query", userContent, "--user-name", userName || "unknown"]],
+          [
+            "python3",
+            [
+              scriptPath,
+              "--query",
+              userContent,
+              "--user-name",
+              userName || "unknown",
+              "--user-id",
+              userId || "",
+            ],
+          ],
+          [
+            "python",
+            [
+              scriptPath,
+              "--query",
+              userContent,
+              "--user-name",
+              userName || "unknown",
+              "--user-id",
+              userId || "",
+            ],
+          ],
         ];
 
   for (const [command, args] of candidates) {
@@ -1326,11 +1375,11 @@ async function routeRequestThroughTierAgent(
               encoding: "utf8",
             },
             (error, stdout, stderr) => {
-            if (error && !stdout) {
-              reject(error);
-              return;
-            }
-            resolve({ stdout: stdout || "", stderr: stderr || "" });
+              if (error && !stdout) {
+                reject(error);
+                return;
+              }
+              resolve({ stdout: stdout || "", stderr: stderr || "" });
             },
           );
         },

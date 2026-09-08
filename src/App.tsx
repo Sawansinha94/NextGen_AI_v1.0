@@ -19,6 +19,12 @@ class AppErrorBoundary extends Component<
   { error: Error | null }
 > {
   state: { error: Error | null } = { error: null };
+  private readonly appChildren: React.ReactNode;
+
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.appChildren = props.children;
+  }
 
   static getDerivedStateFromError(error: Error) {
     return { error };
@@ -51,47 +57,45 @@ class AppErrorBoundary extends Component<
       );
     }
 
-    return this.props.children;
+    return this.appChildren;
   }
 }
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'login' | 'register' | 'chat'>('login');
+  const [currentView, setCurrentView] = useState<"login" | "register" | "chat">(
+    "login",
+  );
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    setCurrentView('chat');
+    setCurrentView("chat");
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    setCurrentView('login');
+    setCurrentView("login");
   };
 
   return (
     <AppErrorBoundary>
-      {currentView === 'login' && (
+      {currentView === "login" && (
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
-          onNavigateRegister={() => setCurrentView('register')}
+          onNavigateRegister={() => setCurrentView("register")}
         />
       )}
 
-      {currentView === 'register' && (
+      {currentView === "register" && (
         <RegistrationFlow
-          onBackToLogin={() => setCurrentView('login')}
-          onRegistrationSuccess={() => setCurrentView('login')}
+          onBackToLogin={() => setCurrentView("login")}
+          onRegistrationSuccess={() => setCurrentView("login")}
         />
       )}
 
-      {currentView === 'chat' && currentUser && (
-        <ChatDashboard
-          user={currentUser}
-          onLogout={handleLogout}
-        />
+      {currentView === "chat" && currentUser && (
+        <ChatDashboard user={currentUser} onLogout={handleLogout} />
       )}
     </AppErrorBoundary>
   );
 }
-

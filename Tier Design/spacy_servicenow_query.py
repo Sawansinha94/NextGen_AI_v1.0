@@ -177,6 +177,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fields", default=DEFAULT_FIELDS)
     parser.add_argument("--execute", action="store_true", help="Send the generated request to ServiceNow")
     parser.add_argument("--user-name", default="unknown")
+    parser.add_argument("--user-id", help="PostgreSQL user ID used to resolve ServiceNow credentials")
     parser.add_argument("--db-config", type=Path, default=DEFAULT_DB_CONFIG)
     parser.add_argument("--snow-config", type=Path, default=DEFAULT_SNOW_CONFIG)
     return parser.parse_args()
@@ -202,7 +203,10 @@ def main() -> int:
             raise ValueError(f"Clarification required: {', '.join(request['missing_info'])}")
         result: dict[str, Any] = request.copy()
         if args.execute:
-            snow_settings = {**load_snow_settings(args.snow_config), "table": request["table"]}
+            snow_settings = {
+                **load_snow_settings(args.snow_config, connection, args.user_id, args.user_name),
+                "table": request["table"],
+            }
             if request["method"] == "GET":
                 result["results"] = query_servicenow(snow_settings, request["query"], args.fields, connection, args.user_name, logging_table)
             else:

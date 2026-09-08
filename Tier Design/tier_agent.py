@@ -141,7 +141,7 @@ def build_response(tier_name: str, payload: Any, request: str) -> dict[str, Any]
     }
 
 
-def route_request(user_request: str, user_name: str = "unknown") -> dict[str, Any]:
+def route_request(user_request: str, user_name: str = "unknown", user_id: str | None = None) -> dict[str, Any]:
     """Try Tier 1, then Tier 2, then Tier 3 until one yields data."""
     tier_scripts = [
         (
@@ -152,6 +152,8 @@ def route_request(user_request: str, user_name: str = "unknown") -> dict[str, An
                 user_request,
                 "--user-name",
                 user_name,
+                "--user-id",
+                user_id or "",
                 "--db-config",
                 str(DEFAULT_DB_CONFIG),
                 "--snow-config",
@@ -166,6 +168,8 @@ def route_request(user_request: str, user_name: str = "unknown") -> dict[str, An
                 user_request,
                 "--user-name",
                 user_name,
+                "--user-id",
+                user_id or "",
                 "--db-config",
                 str(DEFAULT_DB_CONFIG),
                 "--snow-config",
@@ -181,6 +185,8 @@ def route_request(user_request: str, user_name: str = "unknown") -> dict[str, An
                 user_request,
                 "--user-name",
                 user_name,
+                "--user-id",
+                user_id or "",
                 "--db-config",
                 str(DEFAULT_DB_CONFIG),
                 "--snow-config",
@@ -284,13 +290,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--query", required=True, help="User request from the chat bot")
     parser.add_argument("--user-name", default="unknown", help="Current chat user")
+    parser.add_argument("--user-id", help="PostgreSQL user ID used to resolve ServiceNow credentials")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        result = route_request(args.query, args.user_name)
+        result = route_request(args.query, args.user_name, args.user_id)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except Exception as error:
